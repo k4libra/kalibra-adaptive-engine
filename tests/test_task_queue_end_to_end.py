@@ -1,17 +1,18 @@
+import asyncio
 import json
-import time
 from uuid import uuid4
 
 import fakeredis
 import pytest
-from fastapi.testclient import TestClient
 
 from kalibra_engine.main import create_app
 from kalibra_engine.shared.infrastructure import lifespan as lifespan_module
 from kalibra_engine.shared.infrastructure.settings import Settings
+from tests.conftest import running
 
 
-def test_mastery_task_published_by_kalibra_api_gets_a_result(
+@pytest.mark.anyio
+async def test_mastery_task_published_by_kalibra_api_gets_a_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     server = fakeredis.FakeServer()
@@ -24,11 +25,11 @@ def test_mastery_task_published_by_kalibra_api_gets_a_result(
         "create_redis_client",
         lambda _: fakeredis.FakeAsyncRedis(server=server, decode_responses=True),
     )
-    kalibra_api = fakeredis.FakeRedis(server=server, decode_responses=True)
+    kalibra_api = fakeredis.FakeAsyncRedis(server=server, decode_responses=True)
     task_id = str(uuid4())
 
-    with TestClient(create_app()):
-        kalibra_api.xadd(
+    async with running(create_app()):
+        await kalibra_api.xadd(
             settings.redis_tasks_stream,
             {
                 "taskId": task_id,
@@ -38,11 +39,11 @@ def test_mastery_task_published_by_kalibra_api_gets_a_result(
                 ),
             },
         )
-        deadline = time.monotonic() + 3
-        while kalibra_api.xlen(settings.redis_results_stream) == 0 and time.monotonic() < deadline:
-            time.sleep(0.02)
+        async with asyncio.timeout(3):
+            while await kalibra_api.xlen(settings.redis_results_stream) == 0:
+                await asyncio.sleep(0.02)
 
-    [(_, result)] = kalibra_api.xrange(settings.redis_results_stream)
+    [(_, result)] = await kalibra_api.xrange(settings.redis_results_stream)
     assert result["taskId"] == task_id
     assert result["status"] == "SUCCEEDED"
     body = json.loads(result["result"])
