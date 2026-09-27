@@ -1,0 +1,30 @@
+# Local stack: the engine plus the Redis that kalibra-api will publish tasks to.
+#   docker compose up --build
+# The task worker stays off unless REDIS_ENABLED=true (in .env or the shell).
+services:
+  engine:
+    build: .
+    image: kalibra-adaptive-engine:local
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
