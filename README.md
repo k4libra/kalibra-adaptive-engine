@@ -23,8 +23,11 @@ over HTTPS and stores every result.
 - Bounded concurrency towards AI providers
 - `camelCase` JSON contract for the Spring Boot consumer
 - RFC 9457 problem-details error responses
+- Redis Streams task queue (prepared, off by default) with the same contract as REST
 - import-linter boundary enforcement
-- Health endpoint
+- Liveness and readiness health checks
+- Container image and Docker Compose stack
+- Continuous Integration (GitHub Actions)
 
 ## Bounded Contexts
 
@@ -81,8 +84,9 @@ translating its contract into this context's own model.
 | Framework | FastAPI 0.141 · Starlette 1.7 · Uvicorn 0.54 |
 | Validation and settings | Pydantic 2.13 · pydantic-settings 2.15 |
 | Outbound HTTP | HTTPX 0.28 · Tenacity 9.1 |
+| Task queue | Redis 8 Streams · redis-py 8.1 |
 | AI providers | DeepSeek V4-Flash · DeepSeek V4-Pro · Mistral OCR |
-| Tooling | uv · Ruff · mypy (strict) · import-linter · pytest |
+| Tooling | uv · Ruff · mypy (strict) · import-linter · pytest · Docker · GitHub Actions |
 
 ## Project Structure
 
@@ -99,7 +103,7 @@ src/kalibra_engine/
 ├── domain/            Aggregates, entities, value objects, commands, domain services.
 ├── application/       Command services, ACLs, OHS implementation.
 ├── infrastructure/    Provider adapters and configuration.
-└── interfaces/        REST routers and schemas, or the published OHS contract.
+└── interfaces/        REST routers and schemas, queue task handlers, or the OHS contract.
 ```
 
 ## Getting Started
@@ -123,10 +127,23 @@ timeouts, generation attempts, concurrency and BKT parameters.
 ```bash
 uv sync
 uv run fastapi dev src/kalibra_engine/main.py   # development, with reload
-uv run fastapi run src/kalibra_engine/main.py   # production
+```
+
+Or run the container image together with Redis:
+
+```bash
+docker compose up --build                       # engine on :8000, Redis on :6379
+REDIS_ENABLED=true docker compose up --build    # same, with the task worker on
 ```
 
 The interactive documentation is served at `http://localhost:8000/docs`.
+
+## Task Queue
+
+Besides REST, the engine can consume tasks that `kalibra-api` publishes on a Redis
+stream and publish each outcome on a results stream, with the same JSON contract as the
+REST endpoints. It is ready but off until `REDIS_ENABLED=true`. The full contract and
+delivery guarantees are in [`docs/redis-task-queue.md`](docs/redis-task-queue.md).
 
 ## Security
 
@@ -135,6 +152,10 @@ only by `kalibra-api` inside the private network. Provider keys are read from th
 environment and never logged or returned; provider failures are reported without
 their details.
 
+The container image runs as a non-root user, contains only the virtual environment (no
+source tree, tests or build tools) and never includes `.env`: configuration is injected
+at runtime through environment variables.
+
 ## API Endpoints
 
 | Method | Path | Purpose |
@@ -142,7 +163,8 @@ their details.
 | `POST` | `/api/v1/mastery-estimates` | Estimate mastery after an answer (201) |
 | `POST` | `/api/v1/exercise-generations` | Generate verified exercises (201) |
 | `POST` | `/api/v1/curricular-extractions` | Extract and normalize material (201) |
-| `GET` | `/health` | Liveness |
+| `GET` | `/health/live` | Liveness: the process is up (container health check) |
+| `GET` | `/health/ready` | Readiness: HTTP client open, provider keys set, Redis reachable when enabled; `503` otherwise |
 
 ## Error Handling
 
@@ -155,7 +177,8 @@ their details.
 | `409` | An attempt registered on an exhausted generation run |
 | `502` | An AI provider is unreachable, misconfigured or answers badly; details are only logged |
 
-FastAPI keeps resolving its own errors, such as request validation (`422`).
+FastAPI keeps resolving its own errors, such as request validation (`422`). Failed queue
+tasks carry the same problem details in their result.
 
 ## Testing
 
@@ -166,5 +189,10 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src
 ```
 
 Every layer has a worked test example: domain rules, command services with fakes,
-provider adapters with `httpx.MockTransport`, and REST end-to-end tests that run the
-real generation-verification loop against simulated providers.
+provider adapters with `httpx.MockTransport`, REST end-to-end tests that run the real
+generation-verification loop against simulated providers, and task-queue tests against
+an in-memory Redis.
+
+CI (`.github/workflows/ci.yml`) runs every check above on each push and pull request to
+`main` and `develop` (coverage must stay at or above 70 %), then builds the container
+image and smoke-tests it.
