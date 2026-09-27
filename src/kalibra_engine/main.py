@@ -1,5 +1,17 @@
 from fastapi import FastAPI, status
 
+from kalibra_engine.generation.domain.exceptions.content_extraction_failed_exception import (
+    ContentExtractionFailedException,
+)
+from kalibra_engine.generation.domain.exceptions.generation_attempts_exhausted_exception import (
+    GenerationAttemptsExhaustedException,
+)
+from kalibra_engine.generation.interfaces.rest.curricular_extractions_router import (
+    router as curricular_extractions_router,
+)
+from kalibra_engine.generation.interfaces.rest.exercise_generations_router import (
+    router as exercise_generations_router,
+)
 from kalibra_engine.mastery.domain.exceptions.invalid_probability_exception import (
     InvalidProbabilityException,
 )
@@ -25,9 +37,13 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(mastery_estimates_router)
+    app.include_router(exercise_generations_router)
+    app.include_router(curricular_extractions_router)
     EngineExceptionHandler(
         status_by_exception={
             InvalidProbabilityException: status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ContentExtractionFailedException: status.HTTP_422_UNPROCESSABLE_CONTENT,
+            GenerationAttemptsExhaustedException: status.HTTP_409_CONFLICT,
         }
     ).register(app)
     return app
