@@ -65,3 +65,62 @@ skip_covered = true
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
+
+[tool.importlinter]
+root_package = "kalibra_engine"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Bounded contexts are independent (only via verification's OHS)"
+type = "independence"
+modules = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
+ignore_imports = [
+    "kalibra_engine.generation.application.internal.outboundservices.acl.external_verification_service -> kalibra_engine.verification.interfaces.acl.*",
+    "kalibra_engine.generation.dependencies -> kalibra_engine.verification.dependencies",
+    "kalibra_engine.generation.dependencies -> kalibra_engine.verification.interfaces.acl.verification_context_facade",
+]
+
+[[tool.importlinter.contracts]]
+name = "Each bounded context is layered (interfaces > application > infrastructure > domain)"
+type = "layers"
+containers = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
+layers = ["interfaces", "application", "infrastructure", "domain"]
+ignore_imports = [
+    "kalibra_engine.verification.application.acl.verification_context_facade_impl -> kalibra_engine.verification.interfaces.acl.*",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain layers are pure Python"
+type = "forbidden"
+source_modules = [
+    "kalibra_engine.mastery.domain",
+    "kalibra_engine.generation.domain",
+    "kalibra_engine.verification.domain",
+]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "pydantic",
+    "pydantic_settings",
+    "httpx",
+    "tenacity",
+    "kalibra_engine.shared",
+]
+
+[[tool.importlinter.contracts]]
+name = "Shared does not depend on any bounded context"
+type = "forbidden"
+source_modules = ["kalibra_engine.shared"]
+forbidden_modules = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
