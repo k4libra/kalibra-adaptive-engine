@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, boundaries and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Bounded context boundaries
+        run: uv run lint-imports
+
+      - name: Tests (coverage >= 70 %)
+        run: uv run pytest --cov=kalibra_engine --cov-report=term
+
+  image:
+    name: Build and smoke-test the container image
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build -t kalibra-adaptive-engine:ci .
+
+      - name: Run container
+        run: docker run -d --name engine -p 8000:8000 kalibra-adaptive-engine:ci
+
+      - name: Wait for liveness
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health/live; then exit 0; fi
+            sleep 1
+          done
+          docker logs engine
+          exit 1
+
+      - name: Check the API answers
+        run: |
+          curl -fsS -X POST http://localhost:8000/api/v1/mastery-estimates \
+            -H 'Content-Type: application/json' \
+            -d '{"studentId":"8f14e45f-ceea-467a-9575-000000000001","subtopicId":"8f14e45f-ceea-467a-9575-000000000002","outcome":"CORRECT"}'
+
+      - name: Container logs
+        if: always()
+        run: docker logs engine || true
