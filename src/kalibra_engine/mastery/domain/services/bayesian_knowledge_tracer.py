@@ -10,7 +10,7 @@ from kalibra_engine.mastery.domain.services.mastery_level_classifier import (
 
 
 class BayesianKnowledgeTracer:
-    """Bayesian Knowledge Tracing update of a subtopic mastery (requirements, section 10).
+    """Bayesian Knowledge Tracing update of a subtopic mastery.
 
     Args:
         classifier: Classifier used to band the updated estimate.

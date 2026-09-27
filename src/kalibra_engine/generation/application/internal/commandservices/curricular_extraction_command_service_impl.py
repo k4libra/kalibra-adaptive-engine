@@ -17,7 +17,7 @@ from kalibra_engine.shared.infrastructure.external_provider_error import Externa
 
 
 class CurricularExtractionCommandServiceImpl:
-    """Extract curricular material through OCR and normalize it (FR-005).
+    """Extract curricular material through OCR and normalize it.
 
     Args:
         ocr: ACL to the OCR provider.

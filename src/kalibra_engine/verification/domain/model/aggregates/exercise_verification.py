@@ -27,9 +27,8 @@ from kalibra_engine.verification.domain.model.valueobjects.verification_verdict 
 class ExerciseVerification:
     """Verification of one exercise: records checks and reaches a single verdict.
 
-    Every non-conforming exercise is discarded automatically, with no manual override
-    (FR-007, FR-013, section 10). An exercise is approved only when the latest check of
-    every criterion passed.
+    Every non-conforming exercise is discarded automatically, with no manual override.
+    An exercise is approved only when the latest check of every criterion passed.
 
     Args:
         candidate: Exercise under verification.

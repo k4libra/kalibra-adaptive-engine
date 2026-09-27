@@ -34,7 +34,7 @@ class BktParameters:
 
     @classmethod
     def defaults(cls) -> Self:
-        """Initial parameters from the requirements (section 10).
+        """Initial parameters shared by every subtopic.
 
         P(G) = 0.25 because exercises are multiple choice with four options.
 

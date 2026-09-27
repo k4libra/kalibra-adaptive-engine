@@ -11,7 +11,7 @@ _DEFAULTS = BktParameters.defaults()
 class BktParametersSettings(BaseSettings):
     """BKT parameters per subtopic, read from ``BKT_*`` environment variables.
 
-    Every subtopic uses the section 10 defaults unless ``BKT_SUBTOPIC_OVERRIDES`` (JSON:
+    Every subtopic uses the default parameters unless ``BKT_SUBTOPIC_OVERRIDES`` (JSON:
     ``{"<subtopic-uuid>": {"learning": 0.15}}``) overrides some of its parameters.
 
     Attributes:

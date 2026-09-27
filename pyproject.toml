@@ -34,7 +34,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "ASYNC", "RUF", "D"]
-ignore = ["D100", "D104", "D105", "D107", "N818"]  # N818: diagram names exceptions with the "Exception" suffix
+ignore = ["D100", "D104", "D105", "D107", "N818"]  # N818: domain exceptions keep the "Exception" suffix
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

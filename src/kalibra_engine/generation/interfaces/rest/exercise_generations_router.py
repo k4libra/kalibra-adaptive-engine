@@ -21,12 +21,12 @@ async def generate(
     request: GenerateExercisesRequest,
     service: Annotated[GenerationRunCommandService, Depends(get_generation_run_command_service)],
 ) -> list[GenerationRunResponse]:
-    """Generate verified exercises anchored to the subtopic material (FR-007, FR-012).
+    """Generate verified exercises anchored to the subtopic material.
 
     Each run proposes an exercise, verifies it and discards it when verification rejects
     it, until one is approved or the attempts are exhausted. A rejected exercise is never
     returned as ``approvedExercise``; every attempt is returned so curriculum can record
-    them (FR-013, FR-031).
+    them.
     """
     runs = await service.handle(request.to_command())
     return [GenerationRunResponse.from_domain(run) for run in runs]

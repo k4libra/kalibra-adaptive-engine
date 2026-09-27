@@ -23,7 +23,7 @@ async def extract(
         CurricularExtractionCommandService, Depends(get_curricular_extraction_command_service)
     ],
 ) -> ExtractedContentResponse:
-    """Extract and normalize a curricular material (FR-005).
+    """Extract and normalize a curricular material.
 
     A ``422`` problem response means the material could not be extracted: curriculum
     marks it as an ingestion error so the teacher replaces it.

@@ -47,7 +47,7 @@ class ExerciseVerificationCommandServiceImpl:
         self._fallback_service = fallback_service
 
     async def handle(self, command: VerifyExerciseCommand) -> ExerciseVerification:
-        """Verify the exercise and decide: any failed check discards it (NFR-004).
+        """Verify the exercise and decide: any failed check discards it.
 
         Args:
             command: The verification request.

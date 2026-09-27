@@ -45,7 +45,7 @@ class GenerationRunCommandServiceImpl:
         """Run one generation per requested exercise, concurrently.
 
         Each run proposes, verifies and discards until an exercise is approved or its
-        attempts are exhausted; a rejected exercise is never delivered (NFR-004).
+        attempts are exhausted; a rejected exercise is never delivered.
 
         Args:
             command: The generation request.

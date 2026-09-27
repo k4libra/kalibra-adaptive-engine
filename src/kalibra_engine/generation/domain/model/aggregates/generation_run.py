@@ -25,10 +25,10 @@ DEFAULT_MAX_ATTEMPTS = 3
 
 
 class GenerationRun:
-    """Generation of one exercise: propose, verify, discard and retry (FR-007, NFR-004).
+    """Generation of one exercise: propose, verify, discard and retry.
 
     A rejected exercise is never delivered; discarded attempts are kept so that
-    curriculum can record them (FR-013, FR-031).
+    curriculum can record them.
 
     Args:
         course_id: Course of the subtopic.
