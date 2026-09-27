@@ -8,15 +8,18 @@ dependencies = [
     "httpx>=0.28",
     "pydantic>=2.13",
     "pydantic-settings>=2.15",
+    "redis>=8.1",
     "tenacity>=9.1",
 ]
 
 [dependency-groups]
 dev = [
+    "fakeredis>=2.30",
     "import-linter>=2.1",
     "mypy>=1.13",
     "pytest>=8.3",
     "pytest-cov>=6.0",
+    "pytest-timeout>=2.3",
     "ruff>=0.8",
 ]
 
@@ -40,7 +43,7 @@ ignore = ["D100", "D104", "D105", "D107", "N818"]  # N818: domain exceptions kee
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "ASYNC110"]
 
 [tool.mypy]
 strict = true
@@ -52,12 +55,14 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+timeout = 30
 
 [tool.coverage.run]
 source = ["kalibra_engine"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 70
 show_missing = true
 skip_covered = true
 
