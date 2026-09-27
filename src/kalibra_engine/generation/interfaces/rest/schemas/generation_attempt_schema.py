@@ -10,7 +10,7 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 
 
 class GenerationAttemptSchema(CamelModel):
-    """One attempt and its verification verdict, for curriculum to record (FR-013)."""
+    """One attempt and its verification verdict, for curriculum to record."""
 
     number: int
     exercise: ProposedExerciseSchema

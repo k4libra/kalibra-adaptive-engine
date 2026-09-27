@@ -11,7 +11,7 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 
 
 class GenerationRunResponse(CamelModel):
-    """Result of one run: the approved exercise (if any) and every attempt (FR-031)."""
+    """Result of one run: the approved exercise (if any) and every attempt."""
 
     approved_exercise: ProposedExerciseSchema | None
     attempts: list[GenerationAttemptSchema]

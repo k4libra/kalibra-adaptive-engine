@@ -5,7 +5,7 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 
 
 class MasteryEstimateResponse(CamelModel):
-    """Updated mastery; ``posterior - prior`` is the change shown to the student (FR-006)."""
+    """Updated mastery; ``posterior - prior`` is the change shown to the student."""
 
     prior: float
     posterior: float

@@ -23,7 +23,7 @@ async def estimate(
         MasteryEstimationCommandService, Depends(get_mastery_estimation_command_service)
     ],
 ) -> MasteryEstimateResponse:
-    """Estimate the student's mastery of a subtopic after one answer (FR-006).
+    """Estimate the student's mastery of a subtopic after one answer.
 
     Without a prior estimate the update starts from P(L0) = 0.30. The engine is
     stateless: kalibra-api (progress) stores the returned estimate.

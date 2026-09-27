@@ -1,5 +1,5 @@
 class ContentExtractionFailedException(Exception):
-    """Raised when a curricular material cannot be extracted or normalized (FR-005).
+    """Raised when a curricular material cannot be extracted or normalized.
 
     Args:
         reason: Explanation for the teacher, who must replace the material.

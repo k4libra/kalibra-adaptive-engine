@@ -7,7 +7,7 @@ from kalibra_engine.verification.domain.model.valueobjects.verification_criterio
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RejectionReason:
-    """Why an exercise was discarded; visible to the teacher (FR-013).
+    """Why an exercise was discarded; visible to the teacher.
 
     Attributes:
         criterion: Criterion that failed.
