@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from typing import TypedDict
@@ -19,6 +20,8 @@ from kalibra_engine.shared.interfaces.messaging.task_handler import TaskHandler
 
 TaskHandlersFactory = Callable[[httpx.AsyncClient, Settings], Awaitable[Sequence[TaskHandler]]]
 Lifespan = Callable[[FastAPI], AbstractAsyncContextManager["EngineState"]]
+
+logger = logging.getLogger(__name__)
 
 
 class EngineState(TypedDict):
@@ -45,6 +48,7 @@ def build_lifespan(task_handlers: TaskHandlersFactory, problem_for: ProblemMappe
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[EngineState]:
         settings = get_settings()
+        _warn_about_missing_keys(settings)
         async with create_http_client(settings) as http_client, AsyncExitStack() as stack:
             redis = None
             if settings.redis_enabled:
@@ -58,6 +62,18 @@ def build_lifespan(task_handlers: TaskHandlersFactory, problem_for: ProblemMappe
             yield {"http_client": http_client, "redis": redis}
 
     return lifespan
+
+
+def _warn_about_missing_keys(settings: Settings) -> None:
+    missing = {
+        "DEEPSEEK_API_KEY": (settings.deepseek_api_key, "exercise generation and verification"),
+        "MISTRAL_API_KEY": (settings.mistral_api_key, "curricular extraction"),
+    }
+    for variable, (key, capability) in missing.items():
+        if not key.get_secret_value():
+            logger.warning(
+                "%s is not set: %s will answer 502 until it is configured.", variable, capability
+            )
 
 
 async def _stop(task: asyncio.Task[None]) -> None:

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
         provider_max_retries: Attempts per provider call on transient failures.
         generation_max_attempts: Attempts per generation run before it is exhausted.
         llm_max_concurrency: Maximum generation runs processed concurrently per request.
-        redis_enabled: Whether the Redis task worker runs (off until kalibra-api publishes).
+        redis_enabled: Whether the Redis task worker runs (Docker Compose turns it on).
         redis_url: Redis connection URL.
         redis_tasks_stream: Stream where kalibra-api publishes tasks.
         redis_results_stream: Stream where the engine publishes results.
