@@ -19,8 +19,8 @@ Kalibra Adaptive Engine: a **stateless** FastAPI service (Python 3.13, managed w
 
 - **Two transports, one contract.** kalibra-api calls the REST endpoints over HTTPS, or publishes tasks on a Redis stream (`kalibra:engine:tasks`) and reads outcomes from `kalibra:engine:results`. A task's `payload` is exactly the REST request body and its `result` exactly the REST response body; failures are the same RFC 9457 problem details in both. Changing a schema changes both transports. The queue contract and delivery guarantees are in `docs/redis-task-queue.md`.
 - **JSON is `camelCase`** on the wire (for the Java consumer), `snake_case` in Python. All schemas extend `shared/interfaces/rest/camel_model.py::CamelModel`.
-- **Status codes carry meaning for kalibra-api:** `422` means the input or material is bad (don't retry; for extraction, mark the material as an ingestion error), `502` means an AI provider failed (retry later), `409`/`500` need attention.
-- **Queue delivery is at least once**, so kalibra-api stores results idempotently by `taskId`. The Redis worker is off unless `REDIS_ENABLED=true`.
+- **Status codes carry meaning for kalibra-api:** `422` means the input or material is bad (don't retry; for extraction, mark the material as an ingestion error), `502` means an AI provider failed or its key is missing (retry later, never mark the material as an error), `409`/`500` need attention.
+- **Queue delivery is at least once**, so kalibra-api stores results idempotently by `taskId`. The Redis worker is off unless `REDIS_ENABLED=true`; `docker-compose.yml` enables it by default.
 - **What the engine returns is what kalibra-api needs to persist:** mastery returns both `prior` and `posterior` (the consumer shows the change); generation returns every attempt, approved or discarded, with its rejection reason (the consumer audits them and computes approval rates). A rejected exercise must never appear as `approvedExercise`.
 - The engine has no authentication; it is meant to be reachable only by kalibra-api on a private network. The gap-map cache in Redis belongs to kalibra-api; the engine never touches it.
 
@@ -29,7 +29,7 @@ Kalibra Adaptive Engine: a **stateless** FastAPI service (Python 3.13, managed w
 ```bash
 uv sync                                          # install (dev group included)
 uv run fastapi dev src/kalibra_engine/main.py    # run with reload; docs at :8000/docs
-docker compose up --build                        # engine + Redis 8; add REDIS_ENABLED=true for the worker
+docker compose up --build                        # engine + Redis 8, task worker enabled (REDIS_ENABLED=false turns it off)
 
 uv run pytest                                    # full suite (coverage gate: 70 %)
 uv run pytest tests/generation/test_rest.py::test_rejected_exercise_is_discarded_and_regenerated
