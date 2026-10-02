@@ -1,5 +1,7 @@
 from typing import Self
 
+from pydantic import Field
+
 from kalibra_engine.generation.domain.model.aggregates.generation_run import GenerationRun
 from kalibra_engine.generation.interfaces.rest.schemas.generation_attempt_schema import (
     GenerationAttemptSchema,
@@ -13,9 +15,16 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 class GenerationRunResponse(CamelModel):
     """Result of one run: the approved exercise (if any) and every attempt."""
 
-    approved_exercise: ProposedExerciseSchema | None
-    attempts: list[GenerationAttemptSchema]
-    exhausted: bool
+    approved_exercise: ProposedExerciseSchema | None = Field(
+        description="The exercise that passed verification; null when the run is exhausted."
+    )
+    attempts: list[GenerationAttemptSchema] = Field(
+        description="Every attempt of the run, approved or discarded, in order."
+    )
+    exhausted: bool = Field(
+        description="True when every attempt was used without an approved exercise.",
+        examples=[False],
+    )
 
     @classmethod
     def from_domain(cls, run: GenerationRun) -> Self:

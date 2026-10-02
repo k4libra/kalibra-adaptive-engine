@@ -151,6 +151,13 @@ class FakeOcrAdapter(MistralOcrAdapter):
         return self.pages
 
 
+def _status_error(status_code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://api.mistral.ai/v1/ocr")
+    return httpx.HTTPStatusError(
+        f"HTTP {status_code}", request=request, response=httpx.Response(status_code)
+    )
+
+
 def _extraction(document_format: str = "pdf") -> ExtractCurricularContentCommand:
     return ExtractCurricularContentCommand(
         material_id=uuid4(),
@@ -188,16 +195,48 @@ class TestCurricularExtraction:
             await service.handle(_extraction("exe"))
 
     @pytest.mark.anyio
+    @pytest.mark.parametrize("status_code", [400, 413, 415, 422])
+    async def test_document_rejected_by_provider_is_extraction_failure(
+        self, status_code: int
+    ) -> None:
+        service = CurricularExtractionCommandServiceImpl(
+            ExternalOcrService(FakeOcrAdapter(error=_status_error(status_code))),
+            ContentNormalizer(),
+        )
+
+        with pytest.raises(ContentExtractionFailedException, match="No se pudo extraer"):
+            await service.handle(_extraction())
+
+    @pytest.mark.anyio
+    async def test_material_without_text_is_extraction_failure(self) -> None:
+        service = CurricularExtractionCommandServiceImpl(
+            ExternalOcrService(FakeOcrAdapter(pages=["  ", "![img](img.png)"])),
+            ContentNormalizer(),
+        )
+
+        with pytest.raises(ContentExtractionFailedException, match="no contiene texto"):
+            await service.handle(_extraction())
+
+    @pytest.mark.anyio
     @pytest.mark.parametrize(
-        "error", [httpx.ConnectError("down"), ExternalProviderError("mistral-ocr", "bad")]
+        "error",
+        [
+            httpx.ConnectError("down"),
+            httpx.ReadTimeout("slow"),
+            ExternalProviderError("mistral-ocr", "API key is not configured"),
+            ExternalProviderError("mistral-ocr", "unexpected OCR response shape"),
+            *(_status_error(code) for code in (401, 403, 404, 408, 429, 500, 503)),
+        ],
     )
-    async def test_provider_failure_becomes_extraction_failure(self, error: Exception) -> None:
+    async def test_provider_failure_is_not_blamed_on_the_material(self, error: Exception) -> None:
         service = CurricularExtractionCommandServiceImpl(
             ExternalOcrService(FakeOcrAdapter(error=error)), ContentNormalizer()
         )
 
-        with pytest.raises(ContentExtractionFailedException):
+        with pytest.raises(type(error)) as raised:
             await service.handle(_extraction())
+
+        assert raised.value is error
 
 
 class FakeFlashAdapter(DeepSeekFlashAdapter):

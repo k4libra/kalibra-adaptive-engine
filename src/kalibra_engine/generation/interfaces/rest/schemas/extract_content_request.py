@@ -12,12 +12,20 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 class ExtractContentRequest(CamelModel):
     """Curricular extraction request sent by kalibra-api (curriculum)."""
 
-    material_id: UUID
+    material_id: UUID = Field(
+        description="Material being ingested; correlates the extraction in kalibra-api.",
+        examples=["8f14e45f-ceea-467a-9575-000000000003"],
+    )
     storage_reference: str = Field(
         pattern=r"^https://\S+$",
         description="HTTPS URL from which the OCR provider downloads the material.",
+        examples=["https://storage.example.com/materiales/derivadas.pdf"],
     )
-    format: str = Field(min_length=1, description="pdf, docx, pptx, png, jpg, jpeg, avif or webp.")
+    format: str = Field(
+        min_length=1,
+        description="pdf, docx, pptx, png, jpg, jpeg, avif or webp.",
+        examples=["pdf"],
+    )
 
     def to_command(self) -> ExtractCurricularContentCommand:
         """Translate the request into the domain command.

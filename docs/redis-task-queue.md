@@ -1,8 +1,9 @@
 # Redis Task Queue Contract
 
 How `kalibra-api` (Spring Boot) and the Adaptive Engine exchange work through Redis
-Streams. The engine side is implemented and **disabled by default**
-(`REDIS_ENABLED=false`); enable it once `kalibra-api` publishes tasks.
+Streams. The engine side is implemented. It is controlled by `REDIS_ENABLED`: **on by
+default in the Docker Compose stack** (which includes Redis) and off by default in a bare
+run.
 
 ## Flow
 
@@ -57,10 +58,16 @@ XADD kalibra:engine:tasks * taskId 3f0c…e1 type mastery-estimates
 
 | `error.status` | Meaning | Suggested handling in `kalibra-api` |
 |---|---|---|
-| `422` | Invalid task or payload, invalid probability, or material that cannot be extracted | Do not retry; mark the material as "ingestion error" for `curricular-extractions` |
+| `422` | Invalid task or payload, invalid probability, or a material that is itself unusable | Do not retry; mark the material as "ingestion error" for `curricular-extractions` |
 | `409` | Generation run asked for an extra attempt | Do not retry |
-| `502` | An AI provider failed after the engine's own retries | Retry later by publishing a new task |
+| `502` | An AI provider failed after the engine's own retries, is unreachable or is not configured | Retry later by publishing a new task |
 | `500` | Unexpected error, or the task exceeded `REDIS_MAX_DELIVERIES` | Alert; retry manually |
+
+For `curricular-extractions`, `422` is reserved for a material at fault: an unsupported
+`format`, a document that Mistral OCR rejects (`400`, `413`, `415` or `422`) or a material
+without extractable text. A missing or rejected `MISTRAL_API_KEY` (`401`, `403`), a
+transport error or timeout, `408`, `429`, `5xx` and any other provider failure are `502`:
+the material is fine and the task can be published again later.
 
 ## Delivery guarantees
 
@@ -78,8 +85,8 @@ XADD kalibra:engine:tasks * taskId 3f0c…e1 type mastery-estimates
 
 ## Enabling it
 
-1. Set `REDIS_ENABLED=true` and `REDIS_URL` for the engine (`docker compose` already runs
-   Redis 8 and points the engine at it).
+1. `docker compose up` already runs Redis 8, points the engine at it and turns the worker
+   on. For any other deployment set `REDIS_ENABLED=true` and `REDIS_URL` for the engine.
 2. In `kalibra-api`, publish tasks with `XADD` and consume `kalibra:engine:results` with a
    consumer group (Spring Data Redis `StreamMessageListenerContainer`).
 3. Check `GET /health/ready`: the `redis` component must be `UP`.

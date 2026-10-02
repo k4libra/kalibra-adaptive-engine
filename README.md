@@ -13,7 +13,7 @@ over HTTPS and stores every result.
 
 ## Features
 
-- RESTful API with OpenAPI documentation (`/docs`)
+- RESTful API with OpenAPI documentation grouped by tag (`/docs`), with examples and documented errors
 - Domain-Driven Design (bounded context per package, pure-Python domain)
 - Bayesian Knowledge Tracing mastery estimation
 - Exercise generation with DeepSeek V4-Flash
@@ -23,7 +23,7 @@ over HTTPS and stores every result.
 - Bounded concurrency towards AI providers
 - `camelCase` JSON contract for the Spring Boot consumer
 - RFC 9457 problem-details error responses
-- Redis Streams task queue (prepared, off by default) with the same contract as REST
+- Redis Streams task queue with the same contract as REST (on in Docker Compose, off in a bare run)
 - import-linter boundary enforcement
 - Liveness and readiness health checks
 - Container image and Docker Compose stack
@@ -116,11 +116,22 @@ src/kalibra_engine/
 ### Configuration
 
 ```bash
-cp .env.example .env   # set DEEPSEEK_API_KEY and MISTRAL_API_KEY
+cp .env.example .env   # then set DEEPSEEK_API_KEY and MISTRAL_API_KEY
 ```
 
-Every setting has a default except the provider keys; see `.env.example` for models,
-timeouts, generation attempts, concurrency and BKT parameters.
+The two provider keys are the only values you have to fill in. Every other setting has
+a working default, listed and explained in `.env.example` (models, timeouts, generation
+attempts, concurrency, BKT parameters and the Redis queue).
+
+The engine also boots without keys, logging a warning for each missing one:
+
+| Capability | Without keys |
+|---|---|
+| Mastery estimation | Works: it needs no AI provider |
+| Exercise generation and verification | `502` until `DEEPSEEK_API_KEY` is set |
+| Curricular extraction | `502` until `MISTRAL_API_KEY` is set |
+| `GET /health/live` | `200` |
+| `GET /health/ready` | `503`, naming the missing key |
 
 ### Running the application
 
@@ -132,17 +143,34 @@ uv run fastapi dev src/kalibra_engine/main.py   # development, with reload
 Or run the container image together with Redis:
 
 ```bash
-docker compose up --build                       # engine on :8000, Redis on :6379
-REDIS_ENABLED=true docker compose up --build    # same, with the task worker on
+docker compose up --build                        # engine on :8000, Redis on :6379, task worker on
+REDIS_ENABLED=false docker compose up --build    # same, REST only
 ```
 
-The interactive documentation is served at `http://localhost:8000/docs`.
+A bare run serves REST only; set `REDIS_ENABLED=true` (and `REDIS_URL`) to also consume
+the task queue.
+
+### API documentation
+
+Swagger UI is served at `http://localhost:8000/docs` (ReDoc at `/redoc`, the document
+at `/openapi.json`). Operations are grouped by tag:
+
+| Tag | Operations |
+|---|---|
+| `Mastery` | `POST /api/v1/mastery-estimates` |
+| `Generation` | `POST /api/v1/exercise-generations` |
+| `Extraction` | `POST /api/v1/curricular-extractions` |
+| `Health` | `GET /health/live`, `GET /health/ready` |
+
+Every field carries a description and an example, and every operation documents the
+errors it can return. Verification has no endpoint: it runs in-process inside generation.
 
 ## Task Queue
 
 Besides REST, the engine can consume tasks that `kalibra-api` publishes on a Redis
 stream and publish each outcome on a results stream, with the same JSON contract as the
-REST endpoints. It is ready but off until `REDIS_ENABLED=true`. The full contract and
+REST endpoints. The worker runs when `REDIS_ENABLED=true`, which is the default in the
+Docker Compose stack and off in a bare run. The full contract and
 delivery guarantees are in [`docs/redis-task-queue.md`](docs/redis-task-queue.md).
 
 ## Security
@@ -173,11 +201,25 @@ at runtime through environment variables.
 
 | Status | When |
 |---|---|
-| `422` | Invalid probability, or material that cannot be extracted (mark it as an ingestion error) |
+| `422` | Invalid probability, or a material that is itself unusable (mark it as an ingestion error) |
 | `409` | An attempt registered on an exhausted generation run |
 | `502` | An AI provider is unreachable, misconfigured or answers badly; details are only logged |
 
-FastAPI keeps resolving its own errors, such as request validation (`422`). Failed queue
+For curricular extraction the split between `422` and `502` decides whether the teacher
+has to replace the material, so it follows who is at fault:
+
+| Extraction outcome | Status |
+|---|---|
+| Unsupported `format` | `422` |
+| Mistral OCR rejects the document (`400`, `413`, `415` or `422`) | `422` |
+| The extracted material has no text | `422` |
+| `MISTRAL_API_KEY` missing, or rejected by Mistral (`401`, `403`) | `502` |
+| Transport error or timeout | `502` |
+| Mistral answers `408`, `429` or `5xx` after the engine's retries | `502` |
+| Any other Mistral status, or a response the engine cannot read | `502` |
+
+FastAPI keeps resolving its own errors: a request that does not match the schema gets
+`422` with FastAPI's `application/json` validation body, not problem details. Failed queue
 tasks carry the same problem details in their result.
 
 ## Testing

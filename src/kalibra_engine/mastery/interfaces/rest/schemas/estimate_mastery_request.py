@@ -13,13 +13,22 @@ from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 class EstimateMasteryRequest(CamelModel):
     """Answer submitted by a student, sent by kalibra-api (progress)."""
 
-    student_id: UUID
-    subtopic_id: UUID
+    student_id: UUID = Field(
+        description="Student who answered.",
+        examples=["8f14e45f-ceea-467a-9575-000000000001"],
+    )
+    subtopic_id: UUID = Field(
+        description="Subtopic of the exercise; selects the BKT parameters.",
+        examples=["8f14e45f-ceea-467a-9575-000000000002"],
+    )
     prior_probability: float | None = Field(
         default=None,
         description="Latest stored mastery in [0, 1]; omit it when the student has no history.",
+        examples=[0.42],
     )
-    outcome: Literal["CORRECT", "INCORRECT"]
+    outcome: Literal["CORRECT", "INCORRECT"] = Field(
+        description="Whether the student's answer was correct.", examples=["CORRECT"]
+    )
 
     def to_command(self) -> EstimateMasteryCommand:
         """Translate the request into the domain command.
