@@ -49,3 +49,49 @@ async def test_mastery_task_published_by_kalibra_api_gets_a_result(
     body = json.loads(result["result"])
     assert body["initializedFromBase"] is True
     assert body["level"] == "MEDIUM"
+
+
+@pytest.mark.anyio
+async def test_extraction_task_without_provider_key_fails_as_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = fakeredis.FakeServer()
+    settings = Settings(
+        mistral_api_key="",  # type: ignore[arg-type]
+        redis_enabled=True,
+        redis_block_milliseconds=5,
+        redis_consumer_name="engine-e2e",
+    )
+    monkeypatch.setattr(lifespan_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        lifespan_module,
+        "create_redis_client",
+        lambda _: fakeredis.FakeAsyncRedis(server=server, decode_responses=True),
+    )
+    kalibra_api = fakeredis.FakeAsyncRedis(server=server, decode_responses=True)
+    task_id = str(uuid4())
+
+    async with running(create_app()):
+        await kalibra_api.xadd(
+            settings.redis_tasks_stream,
+            {
+                "taskId": task_id,
+                "type": "curricular-extractions",
+                "payload": json.dumps(
+                    {
+                        "materialId": str(uuid4()),
+                        "storageReference": "https://files.test/material.pdf",
+                        "format": "pdf",
+                    }
+                ),
+            },
+        )
+        async with asyncio.timeout(3):
+            while await kalibra_api.xlen(settings.redis_results_stream) == 0:
+                await asyncio.sleep(0.02)
+
+    [(_, result)] = await kalibra_api.xrange(settings.redis_results_stream)
+    assert result["status"] == "FAILED"
+    error = json.loads(result["error"])
+    assert error["status"] == 502
+    assert error["instance"] == f"tasks/curricular-extractions/{task_id}"
