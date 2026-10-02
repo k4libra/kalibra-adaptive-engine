@@ -33,6 +33,8 @@ Inter-session project memory. This file contains ~50 lines: summarize or remove 
 - A Mistral `400` cannot be told apart from an engine misconfiguration (e.g. a wrong
   `MISTRAL_OCR_MODEL`) without parsing the provider body; today it counts as a bad material.
 - `docker compose config` prints every variable of the local `.env`: do not paste its output.
+- redis-py 8 defaults `socket_timeout` to 5 s; a blocking `XREADGROUP` of the same length timed out on every idle
+  poll. `create_redis_client` keeps the socket timeout above `REDIS_BLOCK_MILLISECONDS`. fakeredis does not show this.
 
 ## Next steps (to operate the MVP)
 - Merge the feature branch into `develop` after review; add `ProblemDetails` to the class diagram.
