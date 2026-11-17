@@ -4,6 +4,7 @@ from uuid import UUID
 from kalibra_engine.generation.domain.model.valueobjects.curricular_context import (
     CurricularContext,
 )
+from kalibra_engine.generation.domain.model.valueobjects.difficulty_level import DifficultyLevel
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -16,6 +17,7 @@ class GenerateExercisesCommand:
         context: Curricular anchor.
         mastery_probability: Student's mastery, or None (teacher request or no history).
         quantity: Number of exercises to generate.
+        target_difficulty: Explicit difficulty, or None to use the mastery-based target.
 
     Raises:
         ValueError: If ``quantity`` is lower than one.
@@ -26,6 +28,7 @@ class GenerateExercisesCommand:
     context: CurricularContext
     mastery_probability: float | None
     quantity: int
+    target_difficulty: DifficultyLevel | None = None
 
     def __post_init__(self) -> None:
         if self.quantity < 1:

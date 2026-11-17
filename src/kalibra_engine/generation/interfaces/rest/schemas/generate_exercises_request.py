@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -8,6 +9,7 @@ from kalibra_engine.generation.domain.model.commands.generate_exercises_command 
 from kalibra_engine.generation.domain.model.valueobjects.curricular_context import (
     CurricularContext,
 )
+from kalibra_engine.generation.domain.model.valueobjects.difficulty_level import DifficultyLevel
 from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 
 
@@ -37,6 +39,14 @@ class GenerateExercisesRequest(CamelModel):
         description="Student's mastery; omit it for teacher requests or students without history.",
         examples=[0.35],
     )
+    target_difficulty: Literal["EASY", "MEDIUM", "HARD"] | None = Field(
+        default=None,
+        description=(
+            "Explicit target difficulty; overrides mastery-based targeting. "
+            "Omit it or send null to use the student's mastery band."
+        ),
+        examples=["MEDIUM"],
+    )
     quantity: int = Field(
         ge=1, le=10, description="Approved exercises wanted; one run each.", examples=[1]
     )
@@ -55,4 +65,9 @@ class GenerateExercisesRequest(CamelModel):
             ),
             mastery_probability=self.mastery_probability,
             quantity=self.quantity,
+            target_difficulty=(
+                DifficultyLevel(self.target_difficulty)
+                if self.target_difficulty is not None
+                else None
+            ),
         )

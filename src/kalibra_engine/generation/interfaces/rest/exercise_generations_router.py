@@ -51,9 +51,10 @@ async def generate(
 ) -> list[GenerationRunResponse]:
     """Generate verified exercises anchored to the subtopic material.
 
-    The target difficulty comes from the student's mastery: `EASY` below 0.40 or without
-    an estimate, `MEDIUM` up to 0.70, `HARD` above. Each run asks DeepSeek V4-Flash for a
-    four-option exercise anchored to the subtopic material, verifies it and discards it
+    An explicit `targetDifficulty` overrides the student's mastery. Otherwise the target
+    is `EASY` below 0.40 or without an estimate, `MEDIUM` up to 0.70, `HARD` above.
+    Each run asks DeepSeek V4-Flash for a four-option exercise anchored to the subtopic
+    material, verifies it and discards it
     when verification rejects it, until one is approved or the attempts are exhausted.
 
     Verification has no endpoint: it runs in-process inside this operation. Rules check
@@ -62,6 +63,12 @@ async def generate(
 
     A rejected exercise is never returned as `approvedExercise`. Every attempt, approved
     or discarded, is returned with its rejection reason so kalibra-api can record them.
+    Each exercise includes `explanationSteps` (2-5 Spanish steps with short titles and
+    at most two sentences per detail), `keyIdea` (a one-sentence Spanish takeaway) and
+    `explanation` (step details joined with a blank line). Step kinds are `TEXT`, `CODE`
+    (detail holds the code snippet) and `FORMULA` (detail holds plain math text).
+    A legacy provider response missing steps yields one `TEXT` step from its explanation
+    and an empty `keyIdea`.
     A malformed request answers `422` with FastAPI's validation body; do not retry it.
     """
     runs = await service.handle(request.to_command())

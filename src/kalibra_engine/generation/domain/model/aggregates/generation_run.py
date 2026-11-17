@@ -80,7 +80,7 @@ class GenerationRun:
 
         Args:
             command: The generation request.
-            target: Difficulty the exercise must have.
+            target: Mastery-based difficulty, used when the command has no explicit target.
             max_attempts: Attempts allowed before the run is exhausted.
 
         Returns:
@@ -90,7 +90,9 @@ class GenerationRun:
             course_id=command.course_id,
             subtopic_id=command.subtopic_id,
             context=command.context,
-            target_difficulty=target,
+            target_difficulty=(
+                command.target_difficulty if command.target_difficulty is not None else target
+            ),
             max_attempts=max_attempts,
         )
 
