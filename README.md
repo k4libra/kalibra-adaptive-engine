@@ -23,7 +23,7 @@ over HTTPS and stores every result.
 - Bounded concurrency towards AI providers
 - `camelCase` JSON contract for the Spring Boot consumer
 - RFC 9457 problem-details error responses
-- Redis Streams task queue with the same contract as REST (on in Docker Compose, off in a bare run)
+- REST only: kalibra-api calls every use case synchronously (no queue, no Redis)
 - import-linter boundary enforcement
 - Liveness and readiness health checks
 - Container image and Docker Compose stack
@@ -68,6 +68,13 @@ the following features:
 
 - Choose the exercise difficulty from the student's mastery
 - Generate exercises with DeepSeek V4-Flash anchored to the subtopic material
+- Include `explanationSteps`: 2–5 ordered steps with short Spanish `title`, `detail`
+  (at most two sentences) and `kind` (`TEXT`, `CODE` or `FORMULA`). `CODE` detail holds
+  the code snippet without Markdown fences; `FORMULA` detail holds plain math text.
+- Include `keyIdea`, a one-sentence Spanish takeaway, in approved exercises and every attempt
+- Keep `explanation` as step details joined with a blank line for compatibility;
+  provider responses missing steps yield one `TEXT` step from the original explanation
+  and an empty `keyIdea`. Verification is unchanged.
 - Discard rejected exercises and generate new ones until one is approved or the attempts run out
 - Return every attempt with its verification result, so rejected exercises can be audited and the approval rate measured
 - Generate several exercises concurrently within a configurable limit
@@ -84,7 +91,6 @@ translating its contract into this context's own model.
 | Framework | FastAPI 0.141 · Starlette 1.7 · Uvicorn 0.54 |
 | Validation and settings | Pydantic 2.13 · pydantic-settings 2.15 |
 | Outbound HTTP | HTTPX 0.28 · Tenacity 9.1 |
-| Task queue | Redis 8 Streams · redis-py 8.1 |
 | AI providers | DeepSeek V4-Flash · DeepSeek V4-Pro · Mistral OCR |
 | Tooling | uv · Ruff · mypy (strict) · import-linter · pytest · Docker · GitHub Actions |
 
@@ -103,7 +109,7 @@ src/kalibra_engine/
 ├── domain/            Aggregates, entities, value objects, commands, domain services.
 ├── application/       Command services, ACLs, OHS implementation.
 ├── infrastructure/    Provider adapters and configuration.
-└── interfaces/        REST routers and schemas, queue task handlers, or the OHS contract.
+└── interfaces/        REST routers and schemas, or the OHS contract.
 ```
 
 ## Getting Started
@@ -119,9 +125,9 @@ src/kalibra_engine/
 cp .env.example .env   # then set DEEPSEEK_API_KEY and MISTRAL_API_KEY
 ```
 
-The two provider keys are the only values you have to fill in. Every other setting has
+The two provider keys enable their respective capabilities. Every other setting has
 a working default, listed and explained in `.env.example` (models, timeouts, generation
-attempts, concurrency, BKT parameters and the Redis queue).
+attempts, concurrency and BKT parameters).
 
 The engine also boots without keys, logging a warning for each missing one:
 
@@ -133,6 +139,15 @@ The engine also boots without keys, logging a warning for each missing one:
 | `GET /health/live` | `200` |
 | `GET /health/ready` | `503`, naming the missing key |
 
+An empty `MISTRAL_API_KEY` disables curricular material upload in the platform.
+Set the environment variable and restart the engine to enable upload without code changes;
+the API observes the new availability after its capabilities cache expires (default: 30 s).
+
+`GET /api/v1/capabilities` is an internal endpoint for `kalibra-api`. It always returns
+`200` with `curricularExtraction` and `exerciseGeneration` booleans, determined by whether
+`MISTRAL_API_KEY` and `DEEPSEEK_API_KEY`, respectively, are non-empty. It never calls a
+provider or returns key values, and works independently of readiness.
+
 ### Running the application
 
 ```bash
@@ -140,15 +155,11 @@ uv sync
 uv run fastapi dev src/kalibra_engine/main.py   # development, with reload
 ```
 
-Or run the container image together with Redis:
+Or run the container image:
 
 ```bash
-docker compose up --build                        # engine on :8000, Redis on :6379, task worker on
-REDIS_ENABLED=false docker compose up --build    # same, REST only
+docker compose up --build                        # engine on :8000
 ```
-
-A bare run serves REST only; set `REDIS_ENABLED=true` (and `REDIS_URL`) to also consume
-the task queue.
 
 ### API documentation
 
@@ -160,18 +171,11 @@ at `/openapi.json`). Operations are grouped by tag:
 | `Mastery` | `POST /api/v1/mastery-estimates` |
 | `Generation` | `POST /api/v1/exercise-generations` |
 | `Extraction` | `POST /api/v1/curricular-extractions` |
+| `Capabilities` | `GET /api/v1/capabilities` |
 | `Health` | `GET /health/live`, `GET /health/ready` |
 
 Every field carries a description and an example, and every operation documents the
 errors it can return. Verification has no endpoint: it runs in-process inside generation.
-
-## Task Queue
-
-Besides REST, the engine can consume tasks that `kalibra-api` publishes on a Redis
-stream and publish each outcome on a results stream, with the same JSON contract as the
-REST endpoints. The worker runs when `REDIS_ENABLED=true`, which is the default in the
-Docker Compose stack and off in a bare run. The full contract and
-delivery guarantees are in [`docs/redis-task-queue.md`](docs/redis-task-queue.md).
 
 ## Security
 
@@ -191,8 +195,9 @@ at runtime through environment variables.
 | `POST` | `/api/v1/mastery-estimates` | Estimate mastery after an answer (201) |
 | `POST` | `/api/v1/exercise-generations` | Generate verified exercises (201) |
 | `POST` | `/api/v1/curricular-extractions` | Extract and normalize material (201) |
+| `GET` | `/api/v1/capabilities` | Report enabled extraction and generation capabilities (always 200) |
 | `GET` | `/health/live` | Liveness: the process is up (container health check) |
-| `GET` | `/health/ready` | Readiness: HTTP client open, provider keys set, Redis reachable when enabled; `503` otherwise |
+| `GET` | `/health/ready` | Readiness: HTTP client open and provider keys set; `503` otherwise |
 
 ## Error Handling
 
@@ -219,8 +224,7 @@ has to replace the material, so it follows who is at fault:
 | Any other Mistral status, or a response the engine cannot read | `502` |
 
 FastAPI keeps resolving its own errors: a request that does not match the schema gets
-`422` with FastAPI's `application/json` validation body, not problem details. Failed queue
-tasks carry the same problem details in their result.
+`422` with FastAPI's `application/json` validation body, not problem details.
 
 ## Testing
 
@@ -231,9 +235,8 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src
 ```
 
 Every layer has a worked test example: domain rules, command services with fakes,
-provider adapters with `httpx.MockTransport`, REST end-to-end tests that run the real
-generation-verification loop against simulated providers, and task-queue tests against
-an in-memory Redis.
+provider adapters with `httpx.MockTransport`, and REST end-to-end tests that run the real
+generation-verification loop against simulated providers.
 
 CI (`.github/workflows/ci.yml`) runs every check above on each push and pull request to
 `main` and `develop` (coverage must stay at or above 70 %), then builds the container
