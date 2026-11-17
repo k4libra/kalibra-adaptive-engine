@@ -1,7 +1,6 @@
-# Local stack: the engine plus the Redis that kalibra-api will publish tasks to.
+# Local stack: the engine alone (stateless REST service). Only the provider keys need to be
+# set in .env.
 #   docker compose up --build
-# The stack includes Redis, so the task worker is on by default here; turn it off with
-# REDIS_ENABLED=false (in .env or the shell). Only the provider keys need to be set in .env.
 services:
   engine:
     build: .
@@ -11,21 +10,4 @@ services:
     env_file:
       - path: .env
         required: false
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      REDIS_ENABLED: ${REDIS_ENABLED:-true}
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  redis:
-    image: redis:8-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
     restart: unless-stopped
