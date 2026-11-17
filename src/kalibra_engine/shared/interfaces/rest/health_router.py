@@ -1,18 +1,13 @@
-import asyncio
 from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import Field
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
 
 from kalibra_engine.shared.infrastructure.settings import Settings, get_settings
 from kalibra_engine.shared.interfaces.rest.camel_model import CamelModel
 
 router = APIRouter(prefix="/health", tags=["Health"])
-
-_REDIS_PING_TIMEOUT_SECONDS = 2.0
 
 
 class ComponentHealth(CamelModel):
@@ -36,10 +31,7 @@ class HealthResponse(CamelModel):
     )
     components: dict[str, ComponentHealth] = Field(
         default_factory=dict,
-        description=(
-            "Readiness only: `httpClient`, `deepseek`, `mistral` and, when the task queue "
-            "is enabled, `redis`. Empty for liveness."
-        ),
+        description=("Readiness only: `httpClient`, `deepseek` and `mistral`. Empty for liveness."),
         examples=[
             {
                 "httpClient": {"status": "UP", "detail": None},
@@ -73,8 +65,8 @@ async def live() -> HealthResponse:
         status.HTTP_503_SERVICE_UNAVAILABLE: {
             "model": HealthResponse,
             "description": (
-                "At least one component is down: a provider key is missing, the HTTP "
-                "client is closed, or Redis does not answer while the task queue is on."
+                "At least one component is down: a provider key is missing or the HTTP "
+                "client is closed."
             ),
         }
     },
@@ -86,9 +78,9 @@ async def ready(
 ) -> HealthResponse:
     """Readiness: the engine can serve traffic.
 
-    Checks that the outbound HTTP client is open, that the provider keys are configured
-    and, when the task queue is enabled, that Redis answers. AI providers are not called,
-    so the probe costs nothing. Responds `503` when any component is down.
+    Checks that the outbound HTTP client is open and that the provider keys are
+    configured. AI providers are not called, so the probe costs nothing. Responds `503`
+    when any component is down.
 
     Mastery estimation needs no provider, so it keeps working while this probe reports a
     missing key.
@@ -98,8 +90,6 @@ async def ready(
         "deepseek": _key_health(settings.deepseek_api_key.get_secret_value()),
         "mistral": _key_health(settings.mistral_api_key.get_secret_value()),
     }
-    if settings.redis_enabled:
-        components["redis"] = await _redis_health(getattr(request.state, "redis", None))
     is_up = all(component.status == "UP" for component in components.values())
     if not is_up:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -115,17 +105,4 @@ def _http_client_health(client: httpx.AsyncClient | None) -> ComponentHealth:
 def _key_health(api_key: str) -> ComponentHealth:
     if not api_key:
         return ComponentHealth(status="DOWN", detail="API key is not configured.")
-    return ComponentHealth(status="UP")
-
-
-async def _redis_health(redis: "Redis | None") -> ComponentHealth:
-    if redis is None:
-        return ComponentHealth(status="DOWN", detail="Redis client is not open.")
-    try:
-        async with asyncio.timeout(_REDIS_PING_TIMEOUT_SECONDS):
-            await redis.ping()
-    except (RedisError, OSError, TimeoutError) as error:
-        return ComponentHealth(
-            status="DOWN", detail=f"Redis did not answer: {type(error).__name__}."
-        )
     return ComponentHealth(status="UP")
