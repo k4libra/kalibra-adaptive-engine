@@ -8,6 +8,7 @@ from kalibra_engine.generation.domain.model.valueobjects.curricular_context impo
 )
 from kalibra_engine.generation.domain.model.valueobjects.difficulty_level import DifficultyLevel
 from kalibra_engine.generation.domain.model.valueobjects.exercise_option import ExerciseOption
+from kalibra_engine.generation.domain.model.valueobjects.explanation_step import ExplanationStep
 from kalibra_engine.generation.domain.model.valueobjects.proposed_exercise import (
     ProposedExercise,
 )
@@ -37,6 +38,12 @@ def exercise(statement: str = "¿Derivada de x^2?") -> ProposedExercise:
         ),
         correct_option_key="A",
         explanation="Regla de la potencia.",
+        explanation_steps=(
+            ExplanationStep(
+                title="Identifica la regla", detail="Regla de la potencia.", kind="TEXT"
+            ),
+        ),
+        key_idea="",
         difficulty=DifficultyLevel.EASY,
     )
 

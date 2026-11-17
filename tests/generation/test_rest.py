@@ -80,6 +80,41 @@ def _generation_request(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("overrides", "difficulty"),
+    [
+        ({"masteryProbability": 0.9, "targetDifficulty": "EASY"}, "EASY"),
+        ({"masteryProbability": 0.9, "targetDifficulty": "MEDIUM"}, "MEDIUM"),
+        ({"masteryProbability": 0.1, "targetDifficulty": "HARD"}, "HARD"),
+        ({"targetDifficulty": "HARD"}, "HARD"),
+        ({}, "EASY"),
+        ({"masteryProbability": None}, "EASY"),
+        ({"masteryProbability": 0.3999}, "EASY"),
+        ({"masteryProbability": 0.40}, "MEDIUM"),
+        ({"masteryProbability": 0.70}, "MEDIUM"),
+        ({"masteryProbability": 0.7001}, "HARD"),
+        ({"masteryProbability": 0.9, "targetDifficulty": None}, "HARD"),
+    ],
+)
+async def test_generation_uses_explicit_difficulty_or_mastery_band(
+    engine: AsyncClient,
+    provider_routes: dict[str, list[httpx.Response]],
+    overrides: dict[str, object],
+    difficulty: str,
+) -> None:
+    provider_routes["deepseek-v4-flash"].append(_chat(_draft(difficulty)))
+    provider_routes["deepseek-v4-pro"].append(_chat(_review("A")))
+
+    response = await engine.post(GENERATIONS, json=_generation_request(**overrides))
+
+    assert response.status_code == 201
+    [run] = response.json()
+    assert run["approvedExercise"]["difficulty"] == difficulty
+    assert run["attempts"][0]["difficultyPassed"] is True
+    assert run["exhausted"] is False
+
+
+@pytest.mark.anyio
 async def test_rejected_exercise_is_discarded_and_regenerated(
     engine: AsyncClient, provider_routes: dict[str, list[httpx.Response]]
 ) -> None:
@@ -98,6 +133,65 @@ async def test_rejected_exercise_is_discarded_and_regenerated(
     assert first["usedFallback"] is True
     assert second["approved"] is True
     assert second["rejectionReason"] is None
+
+
+@pytest.mark.anyio
+async def test_generation_returns_legacy_feedback_in_approved_exercise_and_attempts(
+    engine: AsyncClient, provider_routes: dict[str, list[httpx.Response]]
+) -> None:
+    provider_routes["deepseek-v4-flash"] += [_chat({**_draft(), "key_idea": "Ignored."})]
+    provider_routes["deepseek-v4-pro"] += [_chat(_review("A"))]
+
+    response = await engine.post(GENERATIONS, json=_generation_request())
+
+    assert response.status_code == 201
+    [run] = response.json()
+    approved = run["approvedExercise"]
+    assert approved["explanationSteps"] == [
+        {"title": "Explicación", "detail": "Regla de la potencia.", "kind": "TEXT"}
+    ]
+    assert approved["keyIdea"] == ""
+    assert approved["explanation"] == "Regla de la potencia."
+    assert run["attempts"][0]["exercise"] == approved
+
+
+@pytest.mark.anyio
+async def test_generation_preserves_typed_feedback_across_discard_and_approval(
+    engine: AsyncClient, provider_routes: dict[str, list[httpx.Response]]
+) -> None:
+    steps = [
+        {"title": "Identifica la regla", "detail": "Usa la regla de la potencia.", "kind": "TEXT"},
+        {"title": "Deriva la potencia", "detail": "d(x^2)/dx = 2*x", "kind": "FORMULA"},
+        {
+            "title": "Evalúa la derivada",
+            "detail": "def derivada(x):\n    return 2 * x",
+            "kind": "CODE",
+        },
+    ]
+    key_idea = "La regla de la potencia permite derivar x al cuadrado."
+    draft = {
+        **_draft(),
+        "explanation_steps": steps,
+        "key_idea": key_idea,
+        "explanation": "This stale explanation must be replaced.",
+    }
+    provider_routes["deepseek-v4-flash"] += [_chat(draft), _chat(draft)]
+    provider_routes["deepseek-v4-pro"] += [_chat(_review("B")), _chat(_review("A"))]
+
+    response = await engine.post(GENERATIONS, json=_generation_request())
+
+    assert response.status_code == 201
+    [run] = response.json()
+    assert [attempt["approved"] for attempt in run["attempts"]] == [False, True]
+    for proposed in [
+        run["approvedExercise"],
+        *(attempt["exercise"] for attempt in run["attempts"]),
+    ]:
+        assert proposed["explanationSteps"] == steps
+        assert proposed["keyIdea"] == key_idea
+        assert proposed["explanation"] == "\n\n".join(step["detail"] for step in steps)
+        assert "explanation_steps" not in proposed
+        assert "key_idea" not in proposed
 
 
 @pytest.mark.anyio
@@ -144,7 +238,15 @@ async def test_generation_without_deepseek_key_is_bad_gateway(
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "overrides",
-    [{"quantity": 0}, {"quantity": 11}, {"masteryProbability": 1.2}, {"subtopicName": ""}],
+    [
+        {"quantity": 0},
+        {"quantity": 11},
+        {"masteryProbability": 1.2},
+        {"subtopicName": ""},
+        {"targetDifficulty": "VERY_HARD"},
+        {"targetDifficulty": "easy"},
+        {"targetDifficulty": 1},
+    ],
 )
 async def test_invalid_generation_request_is_rejected(
     engine: AsyncClient, overrides: dict[str, object]

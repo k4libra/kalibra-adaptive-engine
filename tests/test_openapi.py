@@ -13,6 +13,7 @@ OPERATIONS = {
     ("post", "/api/v1/mastery-estimates"): ("Mastery", {"201", "422"}),
     ("post", "/api/v1/exercise-generations"): ("Generation", {"201", "409", "422", "502"}),
     ("post", "/api/v1/curricular-extractions"): ("Extraction", {"201", "422", "502"}),
+    ("get", "/api/v1/capabilities"): ("Capabilities", {"200"}),
     ("get", "/health/live"): ("Health", {"200"}),
     ("get", "/health/ready"): ("Health", {"200", "503"}),
 }
@@ -40,7 +41,7 @@ async def test_info_describes_the_service(document: dict[str, Any]) -> None:
 
     assert info["title"] == "Kalibra Adaptive Engine"
     assert info["version"] == engine_version() != "0.0.0"
-    for expected in ("kalibra-api", "Stateless", "kalibra:engine:tasks", "no endpoint"):
+    for expected in ("kalibra-api", "Stateless", "One transport", "no endpoint"):
         assert expected in info["description"]
     for status in ("`409`", "`422`", "`502`"):
         assert status in info["description"]
@@ -50,7 +51,13 @@ async def test_info_describes_the_service(document: dict[str, Any]) -> None:
 async def test_tags_are_ordered_and_described(document: dict[str, Any]) -> None:
     tags = document["tags"]
 
-    assert [tag["name"] for tag in tags] == ["Mastery", "Generation", "Extraction", "Health"]
+    assert [tag["name"] for tag in tags] == [
+        "Mastery",
+        "Generation",
+        "Extraction",
+        "Capabilities",
+        "Health",
+    ]
     assert all(tag["description"] for tag in tags)
 
 
@@ -152,16 +159,66 @@ async def test_wire_field_names_stay_camel_case(document: dict[str, Any]) -> Non
         "priorProbability",
         "outcome",
     }
+    assert set(schemas["GenerateExercisesRequest"]["properties"]) == {
+        "courseId",
+        "subtopicId",
+        "subtopicName",
+        "normalizedContent",
+        "masteryProbability",
+        "targetDifficulty",
+        "quantity",
+    }
     assert set(schemas["GenerationRunResponse"]["properties"]) == {
         "approvedExercise",
         "attempts",
         "exhausted",
+    }
+    assert set(schemas["ProposedExerciseSchema"]["properties"]) == {
+        "statement",
+        "options",
+        "correctOptionKey",
+        "explanation",
+        "explanationSteps",
+        "keyIdea",
+        "difficulty",
     }
     assert set(schemas["ExtractContentRequest"]["properties"]) == {
         "materialId",
         "storageReference",
         "format",
     }
+    capabilities = schemas["CapabilitiesResponse"]
+    assert set(capabilities["required"]) == {"curricularExtraction", "exerciseGeneration"}
+    assert {
+        field: definition["type"] for field, definition in capabilities["properties"].items()
+    } == {"curricularExtraction": "boolean", "exerciseGeneration": "boolean"}
+
+
+@pytest.mark.anyio
+async def test_optional_target_difficulty_is_documented(document: dict[str, Any]) -> None:
+    request = document["components"]["schemas"]["GenerateExercisesRequest"]
+
+    assert "targetDifficulty" not in request["required"]
+    assert request["properties"]["targetDifficulty"]["anyOf"] == [
+        {"enum": ["EASY", "MEDIUM", "HARD"], "type": "string"},
+        {"type": "null"},
+    ]
+
+
+@pytest.mark.anyio
+async def test_structured_feedback_contract_is_documented(document: dict[str, Any]) -> None:
+    schemas = document["components"]["schemas"]
+    exercise = schemas["ProposedExerciseSchema"]
+    assert {"explanationSteps", "keyIdea", "explanation"} <= set(exercise["required"])
+    steps = exercise["properties"]["explanationSteps"]
+    assert steps["minItems"] == 1
+    assert steps["maxItems"] == 5
+    assert "Two to five" in steps["description"]
+    assert "one TEXT step" in steps["description"]
+    assert steps["items"] == {"$ref": "#/components/schemas/ExplanationStepSchema"}
+    step = schemas["ExplanationStepSchema"]
+    assert set(step["required"]) == {"title", "detail", "kind"}
+    assert step["properties"]["kind"]["enum"] == ["TEXT", "CODE", "FORMULA"]
 
 
 @pytest.mark.anyio

@@ -23,6 +23,12 @@ DRAFT = {
     "difficulty": "EASY",
 }
 
+STEPS = [
+    {"title": "Identifica la suma", "detail": "Suma dos y dos.", "kind": "TEXT"},
+    {"title": "Calcula el resultado", "detail": "2 + 2 = 4", "kind": "FORMULA"},
+]
+KEY_IDEA = "Sumar dos y dos da cuatro."
+
 
 def _chat(content: object) -> httpx.Response:
     return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(content)}}]})
@@ -46,6 +52,85 @@ async def test_flash_adapter_requests_json_exercise() -> None:
     assert body["model"] == "deepseek-v4-flash"
     assert body["response_format"] == {"type": "json_object"}
     assert "Aritmética." in body["messages"][1]["content"]
+    prompt = body["messages"][0]["content"]
+    for instruction in (
+        "explanation_steps",
+        "entre 2 y 5",
+        "máximo 2 oraciones",
+        "un título corto en español",
+        "TEXT, CODE o FORMULA",
+        "fragmento de código, sin cercos Markdown",
+        "fórmula en texto matemático plano",
+        "key_idea como una sola oración en español",
+    ):
+        assert instruction in prompt
+    assert draft.explanation_steps is None
+    assert draft.key_idea == ""
+
+
+@pytest.mark.parametrize("count", [2, 5])
+def test_flash_draft_accepts_structured_feedback(count: int) -> None:
+    steps = (STEPS * 3)[:count]
+    draft = DeepSeekFlashDraft.model_validate(
+        {**DRAFT, "explanation_steps": steps, "key_idea": KEY_IDEA}
+    )
+
+    assert draft.explanation_steps is not None
+    assert [step.model_dump() for step in draft.explanation_steps] == steps
+    assert draft.key_idea == KEY_IDEA
+
+
+@pytest.mark.parametrize("count", [0, 1, 6])
+def test_flash_draft_rejects_invalid_step_count(count: int) -> None:
+    with pytest.raises(ValueError):
+        DeepSeekFlashDraft.model_validate(
+            {**DRAFT, "explanation_steps": (STEPS * 3)[:count], "key_idea": KEY_IDEA}
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_step",
+    [
+        {**STEPS[0], "kind": "HTML"},
+        {**STEPS[0], "title": ""},
+        {**STEPS[0], "detail": ""},
+        {**STEPS[0], "title": "   "},
+        {**STEPS[0], "detail": "\n "},
+    ],
+)
+def test_flash_draft_rejects_invalid_step(invalid_step: dict[str, str]) -> None:
+    with pytest.raises(ValueError):
+        DeepSeekFlashDraft.model_validate(
+            {**DRAFT, "explanation_steps": [invalid_step, STEPS[1]], "key_idea": KEY_IDEA}
+        )
+
+
+@pytest.mark.parametrize("key_idea", [None, "", "  "])
+def test_flash_draft_requires_takeaway_for_structured_feedback(key_idea: str | None) -> None:
+    payload = {**DRAFT, "explanation_steps": STEPS}
+    if key_idea is not None:
+        payload["key_idea"] = key_idea
+    with pytest.raises(ValueError, match="key idea"):
+        DeepSeekFlashDraft.model_validate(payload)
+
+
+@pytest.mark.anyio
+async def test_flash_adapter_retries_invalid_feedback() -> None:
+    payloads = iter(
+        [
+            {**DRAFT, "explanation_steps": STEPS[:1], "key_idea": KEY_IDEA},
+            {**DRAFT, "explanation_steps": STEPS, "key_idea": KEY_IDEA},
+        ]
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: _chat(next(payloads)))
+    ) as client:
+        draft = await DeepSeekFlashAdapter(client, SETTINGS).propose(
+            subtopic_name="Suma", curricular_content="Aritmética.", target_difficulty="EASY"
+        )
+
+    assert draft.explanation_steps is not None
+    assert len(draft.explanation_steps) == 2
 
 
 def test_flash_draft_rejects_repeated_keys() -> None:
@@ -114,3 +199,45 @@ async def test_mistral_adapter_requires_api_key() -> None:
             await MistralOcrAdapter(client, Settings()).extract(
                 reference="https://x.test/a.png", document_type="image_url"
             )
+
+
+@pytest.mark.parametrize(
+    ("statement", "expected"),
+    [
+        (
+            "De acuerdo con el material curricular sobre programación orientada a objetos, "
+            "¿qué es un objeto?",
+            "¿Qué es un objeto?",
+        ),
+        (
+            "Según el material curricular, ¿qué tipo de relación define la herencia?",
+            "¿Qué tipo de relación define la herencia?",
+        ),
+        (
+            "En el contexto de la Unidad 2 (algoritmos voraces), ¿qué caracteriza a un voraz?",
+            "¿Qué caracteriza a un voraz?",
+        ),
+        (
+            "De acuerdo con el texto, la derivada de x^2 es:",
+            "La derivada de x^2 es:",
+        ),
+    ],
+)
+def test_flash_draft_removes_source_lead_in_from_statement(statement: str, expected: str) -> None:
+    draft = DeepSeekFlashDraft.model_validate({**DRAFT, "statement": statement})
+
+    assert draft.statement == expected
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "En el diseño orientado a objetos, ¿qué relación existe entre clase base y derivada?",
+        "En el tema de archivos planos, ¿qué operación es básica?",
+        "¿Cuál es el valor retornado al ejecutar misterio(5)?",
+    ],
+)
+def test_flash_draft_keeps_direct_statements(statement: str) -> None:
+    assert (
+        DeepSeekFlashDraft.model_validate({**DRAFT, "statement": statement}).statement == statement
+    )

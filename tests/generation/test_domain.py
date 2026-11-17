@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from kalibra_engine.generation.domain.exceptions.content_extraction_failed_exception import (
@@ -24,6 +26,23 @@ def _run(max_attempts: int = 3) -> GenerationRun:
 
 
 class TestGenerationRun:
+    @pytest.mark.parametrize(
+        ("mastery", "override"),
+        [
+            (0.9, DifficultyLevel.EASY),
+            (0.9, DifficultyLevel.MEDIUM),
+            (0.1, DifficultyLevel.HARD),
+        ],
+    )
+    def test_command_difficulty_overrides_mastery_target(
+        self, mastery: float, override: DifficultyLevel
+    ) -> None:
+        cmd = replace(command(mastery=mastery), target_difficulty=override)
+
+        run = GenerationRun.start(cmd, DifficultyTargetingPolicy().target_for(mastery))
+
+        assert run.target_difficulty is override
+
     def test_starts_from_command(self) -> None:
         cmd = command()
         run = GenerationRun.start(cmd, DifficultyLevel.MEDIUM)
@@ -79,6 +98,8 @@ class TestValueObjects:
                 options=tuple(ExerciseOption(key="A", text=str(i)) for i in range(4)),
                 correct_option_key="A",
                 explanation="e",
+                explanation_steps=(),
+                key_idea="",
                 difficulty=DifficultyLevel.EASY,
             )
 

@@ -289,6 +289,12 @@ class TestAcls:
 
         assert [option.key for option in proposed.options] == ["A", "B", "C", "D"]
         assert proposed.difficulty is DifficultyLevel.MEDIUM
+        assert proposed.explanation == "suma"
+        assert len(proposed.explanation_steps) == 1
+        assert proposed.explanation_steps[0].title == "Explicación"
+        assert proposed.explanation_steps[0].detail == "suma"
+        assert proposed.explanation_steps[0].kind == "TEXT"
+        assert proposed.key_idea == ""
         assert adapter.kwargs == {
             "subtopic_name": "Derivadas",
             "curricular_content": "Regla de la potencia.",
