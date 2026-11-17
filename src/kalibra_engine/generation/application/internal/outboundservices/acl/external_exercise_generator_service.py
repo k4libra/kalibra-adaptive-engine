@@ -3,6 +3,7 @@ from kalibra_engine.generation.domain.model.valueobjects.curricular_context impo
 )
 from kalibra_engine.generation.domain.model.valueobjects.difficulty_level import DifficultyLevel
 from kalibra_engine.generation.domain.model.valueobjects.exercise_option import ExerciseOption
+from kalibra_engine.generation.domain.model.valueobjects.explanation_step import ExplanationStep
 from kalibra_engine.generation.domain.model.valueobjects.proposed_exercise import (
     ProposedExercise,
 )
@@ -42,6 +43,14 @@ class ExternalExerciseGeneratorService:
             curricular_content=context.normalized_content,
             target_difficulty=target.value,
         )
+        steps = (
+            tuple(
+                ExplanationStep(title=step.title, detail=step.detail, kind=step.kind)
+                for step in draft.explanation_steps
+            )
+            if draft.explanation_steps is not None
+            else (ExplanationStep(title="Explicación", detail=draft.explanation, kind="TEXT"),)
+        )
         return ProposedExercise(
             statement=draft.statement,
             options=tuple(
@@ -49,6 +58,8 @@ class ExternalExerciseGeneratorService:
                 for option in sorted(draft.options, key=lambda option: option.key)
             ),
             correct_option_key=draft.correct_option_key,
-            explanation=draft.explanation,
+            explanation="\n\n".join(step.detail for step in steps),
+            explanation_steps=steps,
+            key_idea=draft.key_idea if draft.explanation_steps is not None else "",
             difficulty=DifficultyLevel(draft.difficulty),
         )
