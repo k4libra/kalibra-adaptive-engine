@@ -161,6 +161,16 @@ Or run the container image:
 docker compose up --build                        # engine on :8000
 ```
 
+The image listens on `UVICORN_HOST`/`UVICORN_PORT` (default `0.0.0.0:8000`), read by uvicorn
+itself. It uses no BuildKit cache or bind mounts, so it builds unchanged on Railway.
+
+### Deployment (Railway)
+
+Production runs on Railway from `main` as a private service: no public domain, kalibra-api
+reaches it at `http://${{engine.RAILWAY_PRIVATE_DOMAIN}}:8000`. Set `DEEPSEEK_API_KEY` and
+`MISTRAL_API_KEY`; every other setting has a default. Use `/health/live` as the healthcheck path.
+If the API cannot reach the engine on an IPv6-only private network, set `UVICORN_HOST=::`.
+
 ### API documentation
 
 Swagger UI is served at `http://localhost:8000/docs` (ReDoc at `/redoc`, the document

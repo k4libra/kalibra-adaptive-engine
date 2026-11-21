@@ -2,7 +2,8 @@
 
 Inter-session project memory. This file contains ~50 lines: summarize or remove content that no longer adds value.
 
-## Current status (2026-11-16)
+## Current status (2026-11-21)
+- `release/v1.0.0` (2026-11-21): Railway deploy prep. Dockerfile drops cache/bind mounts; uvicorn reads `UVICORN_HOST`/`UVICORN_PORT` (default 0.0.0.0:8000). Gates: ruff, format, mypy, 4 contracts, pytest 214 (99% coverage). Pitfall: `UVICORN_HOST=::` binds IPv6 only (IPv4 port-forward resets); keep it opt-in.
 - Internal `GET /api/v1/capabilities` implemented with camelCase booleans, OpenAPI and four key combinations/no secret leaks or provider calls tested. Gates pass: ruff, format, mypy strict, 4 import contracts, pytest (207 passed, 99.08% coverage).
 - Optional REST `targetDifficulty` implemented through the generation command and aggregate; omitted/null preserves mastery bands. All gates pass: ruff, format, mypy strict, 4 import contracts, pytest (203 passed, 99.07% coverage).
 - Structured exercise feedback implemented: provider DTO/prompt → pure `ExplanationStep` dataclass → ACL → REST `explanationSteps`/`keyIdea`, including every attempt. Gates: ruff, format (170 files), mypy (141 files), import-linter (4 contracts), pytest (185 passed).
