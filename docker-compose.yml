@@ -1,0 +1,13 @@
+# Local stack: the engine alone (stateless REST service). Only the provider keys need to be
+# set in .env.
+#   docker compose up --build
+services:
+  engine:
+    build: .
+    image: kalibra-adaptive-engine:local
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped

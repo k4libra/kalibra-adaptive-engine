@@ -1,0 +1,8 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The instructions live in `AGENTS.md` (shared with other coding agents) and the project status in
+`MEMORY.md`; both are imported below so there is a single source for each.
+
+@AGENTS.md
+@MEMORY.md

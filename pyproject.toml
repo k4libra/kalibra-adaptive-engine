@@ -17,6 +17,7 @@ dev = [
     "mypy>=1.13",
     "pytest>=8.3",
     "pytest-cov>=6.0",
+    "pytest-timeout>=2.3",
     "ruff>=0.8",
 ]
 
@@ -34,13 +35,13 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "ASYNC", "RUF", "D"]
-ignore = ["D100", "D104", "D105", "D107", "N818"]  # N818: diagram names exceptions with the "Exception" suffix
+ignore = ["D100", "D104", "D105", "D107", "N818"]  # N818: domain exceptions keep the "Exception" suffix
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "ASYNC110"]
 
 [tool.mypy]
 strict = true
@@ -52,12 +53,15 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+timeout = 30
+filterwarnings = ["error"]  # a deprecation fails the suite instead of passing silently
 
 [tool.coverage.run]
 source = ["kalibra_engine"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 70
 show_missing = true
 skip_covered = true
 
@@ -65,3 +69,62 @@ skip_covered = true
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
+
+[tool.importlinter]
+root_package = "kalibra_engine"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Bounded contexts are independent (only via verification's OHS)"
+type = "independence"
+modules = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
+ignore_imports = [
+    "kalibra_engine.generation.application.internal.outboundservices.acl.external_verification_service -> kalibra_engine.verification.interfaces.acl.*",
+    "kalibra_engine.generation.dependencies -> kalibra_engine.verification.dependencies",
+    "kalibra_engine.generation.dependencies -> kalibra_engine.verification.interfaces.acl.verification_context_facade",
+]
+
+[[tool.importlinter.contracts]]
+name = "Each bounded context is layered (interfaces > application > infrastructure > domain)"
+type = "layers"
+containers = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
+layers = ["interfaces", "application", "infrastructure", "domain"]
+ignore_imports = [
+    "kalibra_engine.verification.application.acl.verification_context_facade_impl -> kalibra_engine.verification.interfaces.acl.*",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain layers are pure Python"
+type = "forbidden"
+source_modules = [
+    "kalibra_engine.mastery.domain",
+    "kalibra_engine.generation.domain",
+    "kalibra_engine.verification.domain",
+]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "pydantic",
+    "pydantic_settings",
+    "httpx",
+    "tenacity",
+    "kalibra_engine.shared",
+]
+
+[[tool.importlinter.contracts]]
+name = "Shared does not depend on any bounded context"
+type = "forbidden"
+source_modules = ["kalibra_engine.shared"]
+forbidden_modules = [
+    "kalibra_engine.mastery",
+    "kalibra_engine.generation",
+    "kalibra_engine.verification",
+]
